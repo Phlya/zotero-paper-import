@@ -1,0 +1,40 @@
+<linkset>
+	<html:link rel="localization" href="teams-import.ftl"/>
+</linkset>
+<vbox id="teams-import-prefs" onload="Zotero.TeamsImport.initPrefPane(this)">
+	<groupbox>
+		<label><html:h2 data-l10n-id="teams-import-prefs-import"/></label>
+		<checkbox data-l10n-id="teams-import-fulltext" preference="extensions.teams-import.fetchFullText" native="true"/>
+		<checkbox data-l10n-id="teams-import-prefs-match-titles" preference="extensions.teams-import.matchTitles" native="true"/>
+		<hbox align="center">
+			<label data-l10n-id="teams-import-prefs-tag" control="teams-import-tag"/>
+			<html:input id="teams-import-tag" type="text" size="20" preference="extensions.teams-import.tag"/>
+		</hbox>
+	</groupbox>
+	<groupbox>
+		<label><html:h2 data-l10n-id="teams-import-prefs-auto"/></label>
+		<html:p data-l10n-id="teams-import-prefs-auto-intro"/>
+		<checkbox data-l10n-id="teams-import-prefs-auto-enable" preference="extensions.teams-import.autoImport" native="true"/>
+		<hbox align="center">
+			<label data-l10n-id="teams-import-prefs-inbox" control="teams-import-inbox"/>
+			<html:input id="teams-import-inbox" type="text" size="50" preference="extensions.teams-import.inboxPath"/>
+		</hbox>
+		<html:p class="form-text" data-l10n-id="teams-import-prefs-inbox-hint"/>
+		<hbox align="center">
+			<label data-l10n-id="teams-import-prefs-library" control="teams-import-library"/>
+			<menulist id="teams-import-library" native="true">
+				<menupopup/>
+			</menulist>
+		</hbox>
+		<hbox align="center">
+			<label data-l10n-id="teams-import-prefs-collection" control="teams-import-collection"/>
+			<menulist id="teams-import-collection" native="true">
+				<menupopup/>
+			</menulist>
+		</hbox>
+		<hbox align="center">
+			<label data-l10n-id="teams-import-prefs-interval" control="teams-import-interval"/>
+			<html:input id="teams-import-interval" type="number" min="1" size="4" preference="extensions.teams-import.scanIntervalMinutes"/>
+		</hbox>
+	</groupbox>
+</vbox>

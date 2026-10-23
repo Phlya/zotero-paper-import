@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero/skin/zotero.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-platform/content/zotero.css"?>
+<?xml-stylesheet href="chrome://teams-import/content/importDialog.css" type="text/css"?>
+
+<window
+	xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+	xmlns:html="http://www.w3.org/1999/xhtml"
+	id="teams-import-dialog"
+	data-l10n-id="teams-import-dialog-window"
+	width="680"
+	height="600"
+	persist="width height screenX screenY"
+	onload="TeamsImportDialog.init()"
+>
+	<script src="chrome://global/content/globalOverlay.js"/>
+	<script src="chrome://zotero/content/include.js"/>
+	<script src="chrome://zotero/content/editMenuOverlay.js"/>
+	<script src="importDialog.js"/>
+
+	<html:link rel="localization" href="teams-import.ftl"/>
+
+	<vbox id="container" flex="1">
+		<html:p id="intro" data-l10n-id="teams-import-intro"/>
+		<html:textarea id="input" aria-labelledby="intro" spellcheck="false"/>
+		<html:p id="target"/>
+		<hbox align="center">
+			<checkbox id="fulltext" data-l10n-id="teams-import-fulltext"/>
+			<spacer flex="1"/>
+			<button id="import" data-l10n-id="teams-import-button-import" default="true"/>
+			<button id="close" data-l10n-id="teams-import-button-close"/>
+		</hbox>
+		<html:p id="status" role="status"/>
+		<html:ol id="results"/>
+	</vbox>
+</window>

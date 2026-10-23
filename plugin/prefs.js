@@ -1,0 +1,8 @@
+pref("extensions.teams-import.fetchFullText", true);
+pref("extensions.teams-import.tag", "teams-import");
+pref("extensions.teams-import.matchTitles", true);
+pref("extensions.teams-import.autoImport", true);
+pref("extensions.teams-import.inboxPath", "");
+pref("extensions.teams-import.targetLibrary", "user");
+pref("extensions.teams-import.targetCollection", "");
+pref("extensions.teams-import.scanIntervalMinutes", 5);

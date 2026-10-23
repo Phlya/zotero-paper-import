@@ -1,0 +1,13 @@
+{
+  "id": "sample-0001",
+  "messageType": "message",
+  "createdDateTime": "2026-10-23T11:01:00.000Z",
+  "deletedDateTime": null,
+  "from": { "user": { "id": "sample", "displayName": "Sample Poster" } },
+  "body": {
+    "contentType": "html",
+    "content": "<p>Test message for the Zotero Teams inbox:</p><p><a href=\"https://arxiv.org/abs/1706.03762\">https://arxiv.org/abs/1706.03762</a></p>"
+  },
+  "attachments": [],
+  "webUrl": null
+}

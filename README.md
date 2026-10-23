@@ -14,11 +14,10 @@ Built and checked against Zotero 10.0.4.
 
 ## Install
 
-```sh
-./build.sh          # → build/teams-import-0.6.0.xpi
-```
-
-In Zotero: **Tools → Plugins → ⚙ → Install Plugin From File…** and pick the `.xpi`.
+Download the latest `teams-import-<version>.xpi` from
+[Releases](https://github.com/Phlya/zotero-teams-import/releases/latest), then in Zotero:
+**Tools → Plugins → ⚙ → Install Plugin From File…** and pick the `.xpi`.
+Zotero checks for new versions and updates the plugin automatically.
 
 ## Use
 
@@ -79,8 +78,20 @@ Under **Settings → Teams Import**, or in the Config Editor:
 ## Development
 
 ```sh
-./test/run-tests.sh   # unit tests for linkParser.js (links, identifiers, Teams messages) (uses node, or VS Code's Electron)
-./build.sh
+./test/run-tests.sh   # unit tests for linkParser.js (links, identifiers, Teams messages; uses node, or VS Code's Electron)
+./build.sh            # → build/teams-import-<version>.xpi
 ```
 
 Logging goes to Zotero's debug output (Help → Debug Output Logging), prefixed `Teams Import:`.
+
+## Releasing
+
+```sh
+scripts/release.sh 0.7.0
+```
+
+This sets the version in `plugin/manifest.json`, runs the tests, commits, tags `v0.7.0` and
+pushes. The *Release* GitHub Actions workflow then builds the `.xpi` and publishes it together with
+an `updates.json`. The plugin's `update_url` points at
+`releases/latest/download/updates.json`, so installed copies pick up the new version on Zotero's
+next update check.

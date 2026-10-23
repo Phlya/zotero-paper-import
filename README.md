@@ -95,3 +95,7 @@ pushes. The *Release* GitHub Actions workflow then builds the `.xpi` and publish
 an `updates.json`. The plugin's `update_url` points at
 `releases/latest/download/updates.json`, so installed copies pick up the new version on Zotero's
 next update check.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

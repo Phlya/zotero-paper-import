@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Paper Link Import",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Import papers from pasted text with links, DOIs, arXiv or PubMed IDs, skipping ones already in the library",
   "author": "Ilya Flyamer",
   "applications": {

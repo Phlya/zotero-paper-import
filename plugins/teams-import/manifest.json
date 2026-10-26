@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Teams Paper Import",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Import papers from links posted in Microsoft Teams, skipping ones already in the library",
   "author": "Ilya Flyamer",
   "applications": {

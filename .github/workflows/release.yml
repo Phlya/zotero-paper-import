@@ -65,8 +65,8 @@ jobs:
             --latest \
             --generate-notes
 
-      # Both plugins' update_url point at the "updates" release's updates.json. A fixed release is
-      # used because GitHub's releases/latest/download/ only follows plain version tags (v1.2.3).
+      # Both plugins' update_url point at the "updates" release's updates.json. A fixed address is
+      # more predictable than releases/latest/download/, which can lag behind new releases.
       - name: Update the plugins' update manifest
         env:
           GH_TOKEN: ${{ github.token }}

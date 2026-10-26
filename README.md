@@ -103,8 +103,9 @@ This sets the version in `plugins/<plugin>/manifest.json`, runs the tests, commi
 and publishes it. It also updates `updates.json` on the fixed
 [`updates`](https://github.com/Phlya/zotero-paper-import/releases/tag/updates) release, which both
 plugins' `update_url` point at: it lists the current version of every plugin, and each release
-replaces only its own entry. (A fixed release is needed because GitHub's
-`releases/latest/download/` only follows plain version tags like `v1.2.3`.)
+replaces only its own entry. (A fixed address is more predictable than GitHub's
+`releases/latest/download/`, which can lag behind new releases. GitHub may also serve the previous
+`updates.json` for a few minutes after a release.)
 
 ## License
 

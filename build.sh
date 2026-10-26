@@ -22,11 +22,16 @@ for PLUGIN in $PLUGINS; do
 
 	rm -rf "$STAGE" "$OUT"
 	mkdir -p "$STAGE"
-	cp -R "$SRC/" "$STAGE/"
+	# "src/." copies the folder's contents on both macOS and Linux ("src/" nests it on Linux)
+	cp -R "$SRC/." "$STAGE/"
 	mkdir -p "$STAGE/content/core"
 	cp core/*.js "$STAGE/content/core/"
 	(cd "$STAGE" && zip -qr -X "../../$PLUGIN-$VERSION.xpi" . -x ".*" -x "*/.*") || exit 1
 	rm -rf "$STAGE"
+	# Zotero only installs an .xpi with manifest.json and bootstrap.js at the top level
+	for file in manifest.json bootstrap.js content/core/importer.js; do
+		unzip -l "$OUT" "$file" >/dev/null 2>&1 || { echo "$OUT: $file missing at the expected path" >&2; exit 1; }
+	done
 	echo "$OUT"
 done
 rmdir build/stage 2>/dev/null

@@ -1,202 +1,18 @@
-/* global Zotero, ChromeUtils, TeamsLinkParser, TeamsDedup */
+/* global Zotero, ChromeUtils, LinkParser, Dedup */
 
-var TeamsImport = {
-	id: null,
-	version: null,
-	rootURI: null,
-	_menuKeys: [],
+/*
+ * Import the papers referenced in a block of text: resolve each link or identifier to metadata,
+ * skip papers already in the library, save the rest and optionally find their full text.
+ * Shared by both plugins; each passes its own settings in the options.
+ */
 
-	PREF_PREFIX: "extensions.teams-import.",
+var Importer = {
+	// Set by the plugin, e.g. "Teams Import"
+	logPrefix: "Paper import",
 	PAGE_LOAD_TIMEOUT: 30000,
 
-	init({ id, version, rootURI }) {
-		this.id = id;
-		this.version = version;
-		this.rootURI = rootURI;
-	},
-
-	shutdown() {
-		for (let key of this._menuKeys) {
-			Zotero.MenuManager.unregisterMenu(key);
-		}
-		this._menuKeys = [];
-		for (let symbol of this._prefObservers || []) {
-			Zotero.Prefs.unregisterObserver(symbol);
-		}
-		this._prefObservers = [];
-	},
-
-	getPref(name) {
-		return Zotero.Prefs.get(this.PREF_PREFIX + name, true);
-	},
-
-	setPref(name, value) {
-		Zotero.Prefs.set(this.PREF_PREFIX + name, value, true);
-	},
-
 	log(msg) {
-		Zotero.debug("Teams Import: " + msg);
-	},
-
-	registerMenus() {
-		let key = Zotero.MenuManager.registerMenu({
-			menuID: "teams-import-tools",
-			pluginID: this.id,
-			target: "main/menubar/tools",
-			menus: [{
-				menuType: "menuitem",
-				l10nID: "teams-import-menu-import-text",
-				onCommand: () => this.openDialog(Zotero.getMainWindow()),
-			}, {
-				menuType: "menuitem",
-				l10nID: "teams-import-menu-check-inbox",
-				onCommand: () => TeamsInbox.scan({ interactive: true }),
-			}],
-		});
-		if (key) this._menuKeys.push(key);
-	},
-
-	/**
-	 * Restart the inbox watcher when its settings change
-	 */
-	observePrefs() {
-		this._prefObservers = ["autoImport", "scanIntervalMinutes"].map(name => Zotero.Prefs.registerObserver(
-			this.PREF_PREFIX + name,
-			() => TeamsInbox.start(),
-			true
-		));
-	},
-
-	/**
-	 * Libraries are stored in prefs as "user" or "group:<groupID>", because group IDs stay the
-	 * same across devices and re-syncs while local library IDs don't
-	 */
-	libraryIDFromPref(value) {
-		let m = /^group:(\d+)$/.exec(value || "");
-		if (!m) return Zotero.Libraries.userLibraryID;
-		try {
-			return Zotero.Groups.getLibraryIDFromGroupID(parseInt(m[1])) || null;
-		}
-		catch (e) {
-			return null;
-		}
-	},
-
-	libraryPrefValue(libraryID) {
-		let library = Zotero.Libraries.get(libraryID);
-		return library.libraryType === "group"
-			? "group:" + Zotero.Groups.getGroupIDFromLibraryID(libraryID)
-			: "user";
-	},
-
-	/**
-	 * Fill the library and collection pickers in Settings → Teams Import
-	 * (called from the pane's onload)
-	 */
-	initPrefPane(root) {
-		let doc = root.ownerDocument;
-		let libraryList = doc.getElementById("teams-import-library");
-		let collectionList = doc.getElementById("teams-import-collection");
-		const NEW_COLLECTION = "__new__";
-
-		let addItem = (popup, value, { label, l10nID } = {}) => {
-			let item = doc.createXULElement("menuitem");
-			item.value = value;
-			if (label) item.setAttribute("label", label);
-			if (l10nID) doc.l10n.setAttributes(item, l10nID);
-			popup.append(item);
-		};
-		let select = (list, value) => {
-			list.value = value;
-			if (list.selectedIndex === -1) list.selectedIndex = 0;
-		};
-
-		let libraries = Zotero.Libraries.getAll()
-			.filter(l => (l.libraryType === "user" || l.libraryType === "group") && l.editable && !l.archived);
-		libraryList.menupopup.replaceChildren();
-		for (let library of libraries) {
-			addItem(libraryList.menupopup, this.libraryPrefValue(library.libraryID), { label: library.name });
-		}
-		select(libraryList, this.getPref("targetLibrary") || "user");
-
-		let fillCollections = () => {
-			let libraryID = this.libraryIDFromPref(libraryList.value);
-			let popup = collectionList.menupopup;
-			popup.replaceChildren();
-			addItem(popup, "", { l10nID: "teams-import-prefs-collection-none" });
-			for (let collection of Zotero.Collections.getByLibrary(libraryID, true)) {
-				// Indent subcollections
-				addItem(popup, collection.key, { label: " ".repeat(collection.level) + collection.name });
-			}
-			popup.append(doc.createXULElement("menuseparator"));
-			addItem(popup, NEW_COLLECTION, { l10nID: "teams-import-prefs-collection-new" });
-			select(collectionList, this.getPref("targetCollection") || "");
-		};
-		fillCollections();
-
-		libraryList.addEventListener("command", () => {
-			this.setPref("targetLibrary", libraryList.value);
-			this.setPref("targetCollection", "");
-			fillCollections();
-		});
-		collectionList.addEventListener("command", async () => {
-			if (collectionList.value !== NEW_COLLECTION) {
-				this.setPref("targetCollection", collectionList.value);
-				return;
-			}
-			let name = { value: "" };
-			let ok = Services.prompt.prompt(
-				doc.defaultView,
-				"Teams Import",
-				await doc.l10n.formatValue("teams-import-prefs-collection-new-prompt"),
-				name, null, {}
-			);
-			if (ok && name.value.trim()) {
-				let collection = new Zotero.Collection();
-				collection.libraryID = this.libraryIDFromPref(libraryList.value);
-				collection.name = name.value.trim();
-				await collection.saveTx();
-				this.setPref("targetCollection", collection.key);
-			}
-			fillCollections();
-		});
-	},
-
-	registerPrefPane() {
-		Zotero.PreferencePanes.register({
-			pluginID: this.id,
-			src: this.rootURI + "content/preferences.xhtml",
-			label: "Teams Import",
-		});
-	},
-
-	/**
-	 * Library and collection to save into: the current selection, like Zotero's "Add Item by Identifier"
-	 */
-	getTarget(win) {
-		let pane = win.ZoteroPane;
-		let libraryID = pane.getSelectedLibraryID();
-		let library = libraryID && Zotero.Libraries.get(libraryID);
-		if (!library || !library.editable || library.libraryType === "feed") {
-			libraryID = Zotero.Libraries.userLibraryID;
-			library = Zotero.Libraries.get(libraryID);
-			return { libraryID, collectionID: null, label: library.name };
-		}
-		let collection = pane.getSelectedCollection();
-		return {
-			libraryID,
-			collectionID: collection ? collection.id : null,
-			label: collection ? `${library.name} › ${collection.name}` : library.name,
-		};
-	},
-
-	openDialog(win) {
-		win.openDialog(
-			"chrome://teams-import/content/importDialog.xhtml",
-			"teams-import-dialog",
-			"chrome,centerscreen,resizable,dialog=no",
-			{ plugin: this, target: this.getTarget(win) }
-		);
+		Zotero.debug(`${this.logPrefix}: ${msg}`);
 	},
 
 	/**
@@ -206,13 +22,18 @@ var TeamsImport = {
 	 * @param {Object} options
 	 * @param {Number} options.libraryID
 	 * @param {Number} [options.collectionID]
-	 * @param {Boolean} [options.fetchFullText]
+	 * @param {Boolean} [options.fetchFullText] - Find full text for new items
+	 * @param {String} [options.tag] - Tag for new items
+	 * @param {Boolean} [options.matchTitles] - Treat an identical title as a duplicate
+	 * @param {Boolean} [options.paperTypesOnly] - Skip items that aren't papers
 	 * @param {Function} [options.onProgress] - called with each result as it completes
 	 * @return {Promise<Object[]>} One result per reference:
-	 *     { label, status: "added" | "duplicate" | "failed", item?, reason? }
+	 *     { label, status: "added" | "duplicate" | "skipped" | "failed", item?, reason? }
 	 */
-	async importText(text, { libraryID, collectionID = null, fetchFullText = false, onProgress = () => {} }) {
-		let refs = TeamsLinkParser.extractReferences(text);
+	async importText(text, options) {
+		options = Object.assign({ collectionID: null, fetchFullText: false, onProgress: () => {} }, options);
+		let { fetchFullText, onProgress } = options;
+		let refs = LinkParser.extractReferences(text);
 		this.log(`Found ${refs.length} references`);
 		onProgress({ phase: "start", total: refs.length });
 
@@ -222,7 +43,7 @@ var TeamsImport = {
 			onProgress({ phase: "item", index, label, status: "working" });
 			let result;
 			try {
-				result = await this.importReference(ref, { libraryID, collectionID });
+				result = await this.importReference(ref, options);
 			}
 			catch (e) {
 				Zotero.logError(e);
@@ -251,7 +72,8 @@ var TeamsImport = {
 	/**
 	 * Check for an existing copy, resolve metadata, check again, then save.
 	 */
-	async importReference(ref, { libraryID, collectionID }) {
+	async importReference(ref, options) {
+		let { libraryID } = options;
 		// Elsevier sites (ScienceDirect, Cell, Lancet) block automated page loads,
 		// so get the DOI for the PII from Crossref instead of loading the page
 		if (ref.ids.PII && !ref.ids.DOI) {
@@ -275,7 +97,7 @@ var TeamsImport = {
 		}
 
 		// 1. Cheap check with identifiers visible in the link itself, before any network request
-		let existing = await TeamsDedup.findExisting(libraryID, { ids: ref.ids, url: ref.url });
+		let existing = await Dedup.findExisting(libraryID, { ids: ref.ids, url: ref.url });
 		if (existing) {
 			return { status: "duplicate", item: existing.item, reason: existing.reason };
 		}
@@ -287,24 +109,34 @@ var TeamsImport = {
 		let json = pdfLink ? null : await this.resolve(ref);
 		if (!json) {
 			if (ref.url && (pdfLink || await isPDFURL(ref.url))) {
-				return this.importPDF(ref.url, { libraryID, collectionID });
+				return this.importPDF(ref.url, options);
 			}
 			return { status: "failed", reason: "no metadata found" };
 		}
 
+		// Links to code, videos, news etc. resolve to items too; keep only papers unless disabled
+		if (options.paperTypesOnly && !PAPER_ITEM_TYPES.includes(json.itemType)) {
+			let type = json.itemType;
+			try {
+				type = Zotero.ItemTypes.getLocalizedString(json.itemType);
+			}
+			catch (e) {}
+			return { status: "skipped", reason: `not a paper (${type})` };
+		}
+
 		// 3. Check again with what the translator found (DOI, title, ...)
-		let ids = TeamsLinkParser.identifiersFromItemJSON(json);
-		existing = await TeamsDedup.findExisting(libraryID, {
+		let ids = LinkParser.identifiersFromItemJSON(json);
+		existing = await Dedup.findExisting(libraryID, {
 			ids,
 			url: json.url,
-			title: this.getPref("matchTitles") ? json.title : null,
+			title: options.matchTitles ? json.title : null,
 		});
 		if (existing) {
 			return { status: "duplicate", item: existing.item, reason: existing.reason };
 		}
 
 		// 4. Save
-		let item = await this.save(json, { libraryID, collectionID });
+		let item = await this.save(json, options);
 		return { status: "added", item };
 	},
 
@@ -343,7 +175,7 @@ var TeamsImport = {
 	 * links don't include either, so ask Crossref which one exists
 	 */
 	async doiFromPreprintID(id) {
-		for (let prefix of TeamsLinkParser.PREPRINT_DOI_PREFIXES) {
+		for (let prefix of LinkParser.PREPRINT_DOI_PREFIXES) {
 			let doi = `${prefix}/${id}`;
 			let xhr = await Zotero.HTTP.request("GET", "https://api.crossref.org/works/" + doi + "/agency",
 				{ responseType: "json", timeout: 15000, successCodes: [200, 404] });
@@ -363,7 +195,7 @@ var TeamsImport = {
 		let url = "https://api.crossref.org/works?rows=1&select=DOI&filter=alternative-id:"
 			+ encodeURIComponent(pii);
 		let xhr = await Zotero.HTTP.request("GET", url, { responseType: "json", timeout: 15000 });
-		let doi = TeamsLinkParser.normalizeDOI(xhr.response?.message?.items?.[0]?.DOI);
+		let doi = LinkParser.normalizeDOI(xhr.response?.message?.items?.[0]?.DOI);
 		this.log(`PII ${pii} → ${doi || "no DOI"}`);
 		return doi;
 	},
@@ -428,7 +260,7 @@ var TeamsImport = {
 		return outcomes;
 	},
 
-	async save(json, { libraryID, collectionID }) {
+	async save(json, { libraryID, collectionID, tag }) {
 		// Snapshots and PDF links from the translator are skipped; full text is fetched separately
 		json = Object.assign({}, json, { attachments: [] });
 		let saver = new Zotero.Translate.ItemSaver({
@@ -441,13 +273,12 @@ var TeamsImport = {
 		let item = items.find(i => i.isRegularItem());
 		if (!item) throw new Error("Item could not be saved");
 
-		await this.tagItem(item);
+		await this.tagItem(item, tag);
 		this.log(`Saved item ${item.libraryKey}`);
 		return item;
 	},
 
-	async tagItem(item) {
-		let tag = this.getPref("tag");
+	async tagItem(item, tag) {
 		if (tag) {
 			item.addTag(tag);
 			await item.saveTx();
@@ -458,7 +289,7 @@ var TeamsImport = {
 	 * Fallback for PDF links nothing else could identify: save the PDF and let Zotero's
 	 * "Retrieve Metadata for PDF" create the item from the file (usually from the DOI printed on it)
 	 */
-	async importPDF(url, { libraryID, collectionID }) {
+	async importPDF(url, { libraryID, collectionID, tag, matchTitles }) {
 		this.log(`Importing ${url} as a PDF and recognizing it`);
 		let attachment = await Zotero.Attachments.importFromURL({
 			libraryID,
@@ -481,9 +312,9 @@ var TeamsImport = {
 			return { status: "added", item: attachment, reason: "Zotero couldn't recognize the PDF; saved it without metadata" };
 		}
 
-		let existing = await TeamsDedup.findExisting(libraryID, {
-			ids: TeamsDedup.itemIdentifiers(parent),
-			title: this.getPref("matchTitles") ? parent.getField("title") : null,
+		let existing = await Dedup.findExisting(libraryID, {
+			ids: Dedup.itemIdentifiers(parent),
+			title: matchTitles ? parent.getField("title") : null,
 		}, { excludeItemIDs: [parent.id] });
 		if (existing) {
 			// Undo this import (both items were created a moment ago), but give the existing
@@ -499,11 +330,14 @@ var TeamsImport = {
 			return { status: "duplicate", item: existing.item, reason: existing.reason };
 		}
 
-		await this.tagItem(parent);
+		await this.tagItem(parent, tag);
 		this.log(`Recognized PDF as ${parent.libraryKey}`);
 		return { status: "added", item: parent, hasFile: true };
 	},
 };
+
+// Item types kept when "Only import papers" is on
+const PAPER_ITEM_TYPES = ["journalArticle", "preprint", "book", "bookSection", "conferencePaper", "thesis", "report", "manuscript"];
 
 async function isPDFURL(url) {
 	try {
@@ -529,7 +363,7 @@ function doiFromMetaTags(html) {
 	let re = /<meta\s[^>]*name\s*=\s*["'](?:citation_doi|dc\.identifier|prism\.doi|bepress_citation_doi)["'][^>]*>/gi;
 	for (let tag of html.match(re) || []) {
 		let content = (tag.match(/content\s*=\s*["']([^"']+)["']/i) || [])[1];
-		let doi = content && TeamsLinkParser.normalizeDOI(content);
+		let doi = content && LinkParser.normalizeDOI(content);
 		if (doi) return doi;
 	}
 	return null;

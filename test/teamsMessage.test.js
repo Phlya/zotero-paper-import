@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const P = require("../plugin/content/linkParser.js");
+const P = require("../core/linkParser.js");
+const T = require("../plugins/teams-import/content/teamsMessage.js");
 
 // Shape of the Graph chatMessage that Power Automate's "When a new channel message is added" returns
 const message = {
@@ -22,7 +23,7 @@ const message = {
 };
 
 test("parseTeamsMessage reads the trigger body", () => {
-	let m = P.parseTeamsMessage(message);
+	let m = T.parseTeamsMessage(message);
 	assert.equal(m.id, "1761217260000");
 	assert.equal(m.author, "Jane Doe");
 	assert.equal(m.created, "2026-10-23T11:01:00.000Z");
@@ -35,7 +36,7 @@ test("parseTeamsMessage reads the trigger body", () => {
 });
 
 test("parseTeamsMessage unwraps triggerOutputs()", () => {
-	let m = P.parseTeamsMessage({ statusCode: 200, headers: {}, body: message });
+	let m = T.parseTeamsMessage({ statusCode: 200, headers: {}, body: message });
 	assert.equal(m.id, "1761217260000");
 	assert.equal(m.author, "Jane Doe");
 });
@@ -57,32 +58,32 @@ test("parseTeamsMessage rejects a bare trigger notification", () => {
 			linkToMessage: "https://teams.microsoft.com/l/message/19:c1@thread.tacv2/1792755836084",
 		}],
 	};
-	assert.throws(() => P.parseTeamsMessage(notification), (e) => {
+	assert.throws(() => T.parseTeamsMessage(notification), (e) => {
 		assert.equal(e.notificationOnly, true);
 		assert.equal(e.linkToMessage, notification.value[0].linkToMessage);
 		return true;
 	});
-	assert.throws(() => P.parseTeamsMessage({ something: "else" }), /Not a Teams message/);
+	assert.throws(() => T.parseTeamsMessage({ something: "else" }), /Not a Teams message/);
 });
 
 test("parseTeamsMessage unwraps a single-message value list", () => {
-	assert.equal(P.parseTeamsMessage({ value: [message] }).id, "1761217260000");
+	assert.equal(T.parseTeamsMessage({ value: [message] }).id, "1761217260000");
 });
 
 test("parseTeamsMessage skips system and deleted messages", () => {
-	assert.equal(P.parseTeamsMessage({ ...message, messageType: "systemEventMessage" }).skip, true);
-	assert.equal(P.parseTeamsMessage({ ...message, deletedDateTime: "2026-10-23T12:00:00Z" }).skip, true);
-	assert.throws(() => P.parseTeamsMessage(null));
+	assert.equal(T.parseTeamsMessage({ ...message, messageType: "systemEventMessage" }).skip, true);
+	assert.equal(T.parseTeamsMessage({ ...message, deletedDateTime: "2026-10-23T12:00:00Z" }).skip, true);
+	assert.throws(() => T.parseTeamsMessage(null));
 });
 
 test("messageToNoteHTML", () => {
-	let html = P.messageToNoteHTML(P.parseTeamsMessage(message));
+	let html = T.messageToNoteHTML(T.parseTeamsMessage(message));
 	assert.equal(html,
 		'<p><strong>Posted in Teams</strong> by Jane Doe on 2026-10-23<br/>'
 		+ '<a href="https://teams.microsoft.com/l/message/19%3Aabc%40thread.tacv2/1761217260000">Open message in Teams</a></p>'
 		+ '<blockquote><p>Great paper on enhancers &amp; nanoscopy:<br/>https://www.cell.com/cell/abstract/S0092-8674(26)01130-X</p></blockquote>');
-	let minimal = P.messageToNoteHTML({ html: "<b>x</b> <script>y</script>" });
-	assert.equal(minimal, "<p><strong>Posted in Teams</strong></p><blockquote><p>x y</p></blockquote>");
-	let long = P.messageToNoteHTML({ html: "a".repeat(50) }, { maxLength: 10 });
+	let minimal = T.messageToNoteHTML({ html: "<b>x</b> <script>y</script>" });
+	assert.equal(minimal, "<p><strong>Posted in Teams</strong></p><blockquote><p>x</p></blockquote>");
+	let long = T.messageToNoteHTML({ html: "a".repeat(50) }, { maxLength: 10 });
 	assert.match(long, /a{10}…/);
 });

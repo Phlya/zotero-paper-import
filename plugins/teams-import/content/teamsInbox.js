@@ -1,4 +1,4 @@
-/* global Zotero, Services, Ci, IOUtils, PathUtils, TeamsLinkParser, TeamsImport, setInterval, clearInterval, setTimeout, clearTimeout */
+/* global Zotero, Services, Ci, IOUtils, PathUtils, TeamsMessage, TeamsImport, setInterval, clearInterval, setTimeout, clearTimeout */
 
 /*
  * Watches a folder (synced from OneDrive) where a Power Automate flow saves each new Teams
@@ -100,7 +100,7 @@ var TeamsInbox = {
 			return;
 		}
 		this._warnedTarget = false;
-		let totals = { added: [], duplicates: 0, failed: [], messages: 0 };
+		let totals = { added: [], duplicates: 0, skipped: 0, failed: [], messages: 0 };
 		for (let path of files) {
 			try {
 				let results = await this.processFile(path, inbox, target);
@@ -108,6 +108,7 @@ var TeamsInbox = {
 				totals.messages++;
 				totals.added.push(...results.filter(r => r.status === "added"));
 				totals.duplicates += results.filter(r => r.status === "duplicate").length;
+				totals.skipped += results.filter(r => r.status === "skipped").length;
 				totals.failed.push(...results.filter(r => r.status === "failed"));
 			}
 			catch (e) {
@@ -118,6 +119,7 @@ var TeamsInbox = {
 		if (totals.added.length || totals.failed.length || interactive) {
 			let lines = totals.added.map(r => r.reason ? `${r.item.getDisplayTitle()} (${r.reason})` : r.item.getDisplayTitle());
 			if (totals.duplicates) lines.push(`${totals.duplicates} already in library`);
+			if (totals.skipped) lines.push(`${totals.skipped} non-paper link(s) skipped`);
 			for (let failure of totals.failed) {
 				lines.push(`Couldn't import ${failure.label}: ${failure.reason}`);
 			}
@@ -146,7 +148,7 @@ var TeamsInbox = {
 
 		let message;
 		try {
-			message = TeamsLinkParser.parseTeamsMessage(json);
+			message = TeamsMessage.parseTeamsMessage(json);
 		}
 		catch (e) {
 			// Readable but not a message: the flow is set up wrong, so waiting won't help
@@ -167,11 +169,7 @@ var TeamsInbox = {
 		let results = [];
 		if (!message.skip) {
 			TeamsImport.log(`Importing message ${key} from ${message.author}`);
-			results = await TeamsImport.importText(message.text, {
-				libraryID: target.libraryID,
-				collectionID: target.collectionID,
-				fetchFullText: !!TeamsImport.getPref("fetchFullText"),
-			});
+			results = await TeamsImport.importText(message.text, target);
 			for (let result of results) {
 				// A PDF Zotero couldn't recognize stays standalone, and those can't have notes
 				if (result.status === "added" && result.item.isRegularItem()) {
@@ -187,7 +185,7 @@ var TeamsInbox = {
 		let note = new Zotero.Item("note");
 		note.libraryID = item.libraryID;
 		note.parentID = item.id;
-		note.setNote(TeamsLinkParser.messageToNoteHTML(message));
+		note.setNote(TeamsMessage.messageToNoteHTML(message));
 		await note.saveTx();
 	},
 

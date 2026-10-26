@@ -113,7 +113,7 @@ group library will be added to the group.
 
 - **Replies** are included with the flow above (the trigger fires for them too).
 - **Older messages aren't imported.** For a backfill, copy the old messages from Teams and paste
-  them into **Tools → Import Papers from Teams Text…**.
+  them into **Tools → Import Papers from Text…** (the Paper Link Import plugin).
 - **Zotero must run sometime.** Messages wait in the folder until Zotero is open; nothing is lost
   while it's closed.
 - **Edited messages** aren't picked up again; only the version when it was first posted.

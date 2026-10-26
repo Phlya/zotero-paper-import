@@ -1,26 +1,18 @@
-/* global Zotero, Services, Cc, Ci */
+/* global Zotero, Services */
 
 var TeamsImport;
 var TeamsInbox;
-var chromeHandle;
 
 function install() {}
 
 async function startup({ id, version, rootURI }) {
 	await Zotero.initializationPromise;
 
-	let aomStartup = Cc["@mozilla.org/addons/addon-manager-startup;1"]
-		.getService(Ci.amIAddonManagerStartup);
-	let manifestURI = Services.io.newURI(rootURI + "manifest.json");
-	chromeHandle = aomStartup.registerChrome(manifestURI, [
-		["content", "teams-import", rootURI + "content/"],
-	]);
-
-	// Each script defines one global (TeamsLinkParser, TeamsDedup, TeamsImport, TeamsInbox) in this scope
-	Services.scriptloader.loadSubScript(rootURI + "content/linkParser.js");
-	Services.scriptloader.loadSubScript(rootURI + "content/dedup.js");
-	Services.scriptloader.loadSubScript(rootURI + "content/teamsImport.js");
-	Services.scriptloader.loadSubScript(rootURI + "content/teamsInbox.js");
+	// Shared core first, then this plugin's scripts; each defines one global in this scope
+	for (let script of ["core/linkParser.js", "core/dedup.js", "core/importer.js",
+		"teamsMessage.js", "teamsImport.js", "teamsInbox.js"]) {
+		Services.scriptloader.loadSubScript(rootURI + "content/" + script);
+	}
 	TeamsImport.init({ id, version, rootURI });
 	Zotero.TeamsImport = TeamsImport;
 
@@ -50,8 +42,6 @@ function shutdown() {
 	TeamsImport = undefined;
 	TeamsInbox = undefined;
 	delete Zotero.TeamsImport;
-	chromeHandle?.destruct();
-	chromeHandle = null;
 }
 
 function uninstall() {}

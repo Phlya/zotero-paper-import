@@ -1,9 +1,9 @@
 /*
- * Pure helpers for turning Teams message text/HTML into paper references.
+ * Pure helpers for turning message text/HTML into paper references.
  * No Zotero dependencies, so this file can be unit-tested outside Zotero.
  */
 
-var TeamsLinkParser = (function () {
+var LinkParser = (function () {
 	// Hosts whose links are never papers (Teams chrome, file shares, images, meeting links)
 	const IGNORED_HOSTS = [
 		/(^|\.)teams\.microsoft\.com$/,
@@ -17,6 +17,9 @@ var TeamsLinkParser = (function () {
 	];
 
 	const IGNORED_EXTENSIONS = /\.(png|jpe?g|gif|svg|webp|mp4|mov|zip|docx?|xlsx?|pptx?)$/i;
+
+	// "www.example.org/…" anywhere, or "host.tld/…" for common TLDs; not inside e-mail addresses or other URLs
+	const SCHEMELESS_URL_RE = /(?<![@\w.\/-])(?:www\.[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s<>"'`]*)?|(?:[a-z0-9-]+\.)+(?:com|org|net|edu|gov|int|io|ai|bio|science|info|eu|ch|de|uk|fr|nl|se|dk|jp|cn|au|ca|us)\/[^\s<>"'`]*)/gi;
 
 	const TRACKING_PARAMS = /^(utm_\w+|fbclid|gclid|mc_cid|mc_eid|_hs\w+|ref|rss|via|cmp|campaign|sf\d+|featured_on|dgcid|elqTrack\w*)$/i;
 
@@ -276,7 +279,7 @@ var TeamsLinkParser = (function () {
 	}
 
 	/**
-	 * Extract candidate paper references from a Teams message (HTML or plain text).
+	 * Extract candidate paper references from a message (HTML or plain text), e.g. from Teams.
 	 *
 	 * Returns one entry per distinct paper reference, in order of appearance:
 	 *   { url?: string, ids: { DOI?, arXiv?, PMID?, PMCID? }, source: string }
@@ -314,6 +317,13 @@ var TeamsLinkParser = (function () {
 			refs.push(ref);
 		};
 
+		// Links without a scheme, as Teams displays them ("www.biorxiv.org/…", "nature.com/articles/…")
+		let textWithoutURLs = text.replace(/\bhttps?:\/\/[^\s<>"'`]+/gi, " ");
+		for (let m of textWithoutURLs.matchAll(SCHEMELESS_URL_RE)) {
+			urls.push("https://" + m[0]);
+		}
+		textWithoutURLs = textWithoutURLs.replace(SCHEMELESS_URL_RE, " ");
+
 		for (let raw of urls) {
 			let url = cleanURL(unwrapURL(trimTrailing(raw.trim())));
 			if (isIgnored(url)) continue;
@@ -321,9 +331,9 @@ var TeamsLinkParser = (function () {
 		}
 
 		// Bare identifiers in the text that weren't part of a URL
-		let textWithoutURLs = text.replace(/\bhttps?:\/\/[^\s<>"'`]+/gi, " ");
 		for (let m of textWithoutURLs.matchAll(/(?:\bdoi:\s*)?\b10\.\d{4,9}\/[^\s"<>]+/gi)) {
-			let doi = normalizeDOI(trimTrailing(m[0]));
+			// Same cleanup as DOIs in links, e.g. bioRxiv version suffixes
+			let doi = normalizeDOI(cleanDOIFromURL(trimTrailing(m[0]).replace(/^doi:\s*/i, "")));
 			if (doi) add({ ids: { DOI: doi }, source: m[0] });
 		}
 		for (let m of textWithoutURLs.matchAll(/\barxiv:\s*([a-z\-]+(?:\.[A-Z]{2})?\/\d{7}|\d{4}\.\d{4,5})(v\d+)?/gi)) {
@@ -376,12 +386,34 @@ var TeamsLinkParser = (function () {
 
 	function htmlToText(html) {
 		return decodeEntities(String(html || "")
+			.replace(/<!--[\s\S]*?-->/g, "")
+			.replace(/<(head|style|script)\b[\s\S]*?<\/\1>/gi, "")
 			.replace(/<br\s*\/?>/gi, "\n")
 			.replace(/<\/(p|div|li|blockquote)>/gi, "\n")
 			.replace(/<[^>]+>/g, ""))
 			.replace(/[ \t]+/g, " ")
 			.replace(/\s*\n\s*/g, "\n")
 			.trim();
+	}
+
+	/**
+	 * Plain text for pasted HTML that keeps link targets: a link whose text isn't its own address
+	 * ("this paper") becomes "this paper <https://…>", so the address survives the paste.
+	 */
+	function htmlToTextWithLinks(html) {
+		let withLinks = String(html || "").replace(
+			/<a\b[^>]*\bhref\s*=\s*("([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>/gi,
+			(match, quoted, dq, sq, inner) => {
+				let href = decodeEntities(dq ?? sq);
+				let label = htmlToText(inner);
+				if (!/^https?:/i.test(href)) return inner;
+				let bare = u => u.replace(/^(?:https?:\/\/)?(?:www\.)?/i, "").replace(/\/+$/, "").toLowerCase();
+				// Teams shows links as their address without "https://"
+				if (!label || bare(label) === bare(href)) return " " + escapeHTML(href) + " ";
+				return `${inner} &lt;${escapeHTML(href)}&gt;`;
+			}
+		);
+		return htmlToText(withLinks);
 	}
 
 	function escapeHTML(s) {
@@ -392,63 +424,11 @@ var TeamsLinkParser = (function () {
 			.replace(/"/g, "&quot;");
 	}
 
-	/**
-	 * Read a Teams channel message as written by the Power Automate flow: the Graph
-	 * chatMessage from "When a new channel message is added", either as-is or wrapped in
-	 * { body: ... } (if the flow saved triggerOutputs() instead of triggerBody()).
-	 *
-	 * @return {{id, author, created, url, html, text, skip}} `text` is what to scan for links;
-	 *     `skip` is true for system/deleted messages
-	 */
-	function parseTeamsMessage(json) {
-		// The trigger itself only delivers a change notification ({ value: [{ resourceData, messageId,
-		// linkToMessage, ... }] }) without the message text; the flow needs "Get message details" for that
-		let list = json && Array.isArray(json.value) ? json.value : null;
-		if (list && list.length && list.every(v => v && v.resourceData && !v.body)) {
-			let e = new Error("The file contains only a Teams change notification, not the message");
-			e.notificationOnly = true;
-			e.linkToMessage = list[0].linkToMessage || null;
-			throw e;
-		}
-		if (list && list.length === 1) json = list[0];
-		let msg = json && json.body && json.body.body && typeof json.body.body === "object" ? json.body : json;
-		if (!msg || typeof msg !== "object" || !msg.body) throw new Error("Not a Teams message");
-		let html = (msg.body && msg.body.content) || "";
-		// Link previews and cards can carry URLs outside the body
-		let extra = (msg.attachments || [])
-			.map(a => [a.contentUrl, typeof a.content === "string" ? a.content : JSON.stringify(a.content || "")].filter(Boolean).join(" "))
-			.join("\n");
-		return {
-			id: msg.id || null,
-			author: (msg.from && msg.from.user && msg.from.user.displayName) || null,
-			created: msg.createdDateTime || null,
-			url: msg.webUrl || msg.linkToMessage || null,
-			html,
-			text: extra ? html + "\n" + extra : html,
-			skip: (msg.messageType && msg.messageType !== "message") || !!msg.deletedDateTime,
-		};
-	}
-
-	/**
-	 * Child note recording where a paper came from
-	 */
-	function messageToNoteHTML(message, { maxLength = 2000 } = {}) {
-		let by = [
-			message.author && `by ${escapeHTML(message.author)}`,
-			message.created && `on ${escapeHTML(message.created.slice(0, 10))}`,
-		].filter(Boolean).join(" ");
-		let text = htmlToText(message.html);
-		if (text.length > maxLength) text = text.slice(0, maxLength) + "…";
-		let link = message.url ? `<br/><a href="${escapeHTML(message.url)}">Open message in Teams</a>` : "";
-		return `<p><strong>Posted in Teams</strong>${by ? " " + by : ""}${link}</p>`
-			+ (text ? `<blockquote><p>${escapeHTML(text).replace(/\n/g, "<br/>")}</p></blockquote>` : "");
-	}
-
 	return {
 		extractReferences,
-		parseTeamsMessage,
-		messageToNoteHTML,
 		htmlToText,
+		escapeHTML,
+		htmlToTextWithLinks,
 		identifiersFromURL,
 		identifiersFromItemJSON,
 		unwrapURL,
@@ -465,5 +445,5 @@ var TeamsLinkParser = (function () {
 })();
 
 if (typeof module !== "undefined") {
-	module.exports = TeamsLinkParser;
+	module.exports = LinkParser;
 }

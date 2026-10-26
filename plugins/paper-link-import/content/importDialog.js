@@ -1,6 +1,6 @@
 /* global Zotero */
 
-var TeamsImportDialog = {
+var ImportDialog = {
 	plugin: null,
 	target: null,
 	running: false,
@@ -10,13 +10,22 @@ var TeamsImportDialog = {
 		this.plugin = plugin;
 		this.target = target;
 
-		document.l10n.setAttributes(this.el("target"), "teams-import-target", { target: target.label });
+		document.l10n.setAttributes(this.el("target"), "paper-link-import-target", { target: target.label });
 		this.el("fulltext").checked = !!plugin.getPref("fetchFullText");
 		this.el("fulltext").addEventListener("command", () => {
 			plugin.setPref("fetchFullText", this.el("fulltext").checked);
 		});
 		this.el("import").addEventListener("command", () => this.run());
 		this.el("close").addEventListener("command", () => window.close());
+		// Copied messages and web pages carry HTML on the clipboard; use it so links hidden behind
+		// words ("this paper") keep their addresses, which plain-text pasting would drop
+		this.el("input").addEventListener("paste", (event) => {
+			let html = event.clipboardData?.getData("text/html");
+			if (!html) return;
+			event.preventDefault();
+			let input = this.el("input");
+			input.setRangeText(plugin.htmlToTextWithLinks(html), input.selectionStart, input.selectionEnd, "end");
+		});
 		this.el("input").addEventListener("keydown", (event) => {
 			if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
 				event.preventDefault();
@@ -51,7 +60,7 @@ var TeamsImportDialog = {
 					switch (event.phase) {
 						case "start":
 							total = event.total;
-							this.setStatus("teams-import-status-working", { done: 0, total });
+							this.setStatus("paper-link-import-status-working", { done: 0, total });
 							break;
 						case "item":
 							if (!rows[event.index]) {
@@ -60,24 +69,25 @@ var TeamsImportDialog = {
 							this.updateRow(rows[event.index], event);
 							if (event.status !== "working" && event.hasFile === undefined) {
 								done++;
-								this.setStatus("teams-import-status-working", { done, total });
+								this.setStatus("paper-link-import-status-working", { done, total });
 							}
 							break;
 						case "fulltext":
-							this.setStatus("teams-import-status-fulltext", { total: event.total });
+							this.setStatus("paper-link-import-status-fulltext", { total: event.total });
 							break;
 					}
 				},
 			});
 
 			if (!results.length) {
-				this.setStatus("teams-import-status-none");
+				this.setStatus("paper-link-import-status-none");
 			}
 			else {
 				let countOf = status => results.filter(r => r.status === status).length;
-				this.setStatus("teams-import-status-done", {
+				this.setStatus("paper-link-import-status-done", {
 					added: countOf("added"),
 					duplicates: countOf("duplicate"),
+					skipped: countOf("skipped"),
 					failed: countOf("failed"),
 				});
 			}
@@ -121,27 +131,30 @@ var TeamsImportDialog = {
 		}
 		switch (result.status) {
 			case "working":
-				document.l10n.setAttributes(state, "teams-import-result-working");
+				document.l10n.setAttributes(state, "paper-link-import-result-working");
 				break;
 			case "added":
 				if (result.reason) {
-					document.l10n.setAttributes(state, "teams-import-result-added-reason", { reason: result.reason });
+					document.l10n.setAttributes(state, "paper-link-import-result-added-reason", { reason: result.reason });
 				}
 				else if (result.hasFile === undefined) {
-					document.l10n.setAttributes(state, "teams-import-result-added");
+					document.l10n.setAttributes(state, "paper-link-import-result-added");
 				}
 				else if (result.hasFile) {
-					document.l10n.setAttributes(state, "teams-import-result-added-file");
+					document.l10n.setAttributes(state, "paper-link-import-result-added-file");
 				}
 				else {
-					document.l10n.setAttributes(state, "teams-import-result-added-nofile");
+					document.l10n.setAttributes(state, "paper-link-import-result-added-nofile");
 				}
 				break;
 			case "duplicate":
-				document.l10n.setAttributes(state, "teams-import-result-duplicate", { reason: result.reason });
+				document.l10n.setAttributes(state, "paper-link-import-result-duplicate", { reason: result.reason });
+				break;
+			case "skipped":
+				document.l10n.setAttributes(state, "paper-link-import-result-skipped", { reason: result.reason });
 				break;
 			case "failed":
-				document.l10n.setAttributes(state, "teams-import-result-failed", { reason: result.reason });
+				document.l10n.setAttributes(state, "paper-link-import-result-failed", { reason: result.reason });
 				break;
 		}
 	},

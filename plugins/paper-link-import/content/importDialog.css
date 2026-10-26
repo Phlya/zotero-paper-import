@@ -56,5 +56,6 @@
 }
 
 #results li.added .state { color: var(--accent-green, green); }
-#results li.duplicate .state { color: var(--fill-secondary); }
+#results li.duplicate .state,
+#results li.skipped .state { color: var(--fill-secondary); }
 #results li.failed .state { color: var(--accent-red, red); }

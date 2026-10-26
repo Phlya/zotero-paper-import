@@ -4,8 +4,9 @@
 <vbox id="teams-import-prefs" onload="Zotero.TeamsImport.initPrefPane(this)">
 	<groupbox>
 		<label><html:h2 data-l10n-id="teams-import-prefs-import"/></label>
-		<checkbox data-l10n-id="teams-import-fulltext" preference="extensions.teams-import.fetchFullText" native="true"/>
+		<checkbox data-l10n-id="teams-import-prefs-fulltext" preference="extensions.teams-import.fetchFullText" native="true"/>
 		<checkbox data-l10n-id="teams-import-prefs-match-titles" preference="extensions.teams-import.matchTitles" native="true"/>
+		<checkbox data-l10n-id="teams-import-prefs-paper-types" preference="extensions.teams-import.paperTypesOnly" native="true"/>
 		<hbox align="center">
 			<label data-l10n-id="teams-import-prefs-tag" control="teams-import-tag"/>
 			<html:input id="teams-import-tag" type="text" size="20" preference="extensions.teams-import.tag"/>

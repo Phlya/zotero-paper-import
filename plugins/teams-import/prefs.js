@@ -1,6 +1,7 @@
 pref("extensions.teams-import.fetchFullText", true);
 pref("extensions.teams-import.tag", "teams-import");
 pref("extensions.teams-import.matchTitles", true);
+pref("extensions.teams-import.paperTypesOnly", true);
 pref("extensions.teams-import.autoImport", true);
 pref("extensions.teams-import.inboxPath", "");
 pref("extensions.teams-import.targetLibrary", "user");

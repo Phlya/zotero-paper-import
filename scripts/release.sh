@@ -1,13 +1,21 @@
 #!/bin/sh
-# Release a new version: scripts/release.sh 0.7.0
-# Sets the version in plugin/manifest.json, runs the tests, commits, tags v<version> and pushes.
-# The Release workflow on GitHub then builds the .xpi and publishes it with updates.json.
+# Release a new version of one plugin: scripts/release.sh <plugin> <version>
+#   e.g. scripts/release.sh teams-import 0.7.0
+# Sets the version in plugins/<plugin>/manifest.json, runs the tests, commits, tags
+# <plugin>-v<version> and pushes. The Release workflow on GitHub then builds the .xpi and
+# publishes it with the combined updates.json.
 set -e
 cd "$(dirname "$0")/.."
 
-VERSION="$1"
-if [ -z "$VERSION" ]; then
-	echo "Usage: $0 <version>" >&2
+PLUGIN="$1"
+VERSION="$2"
+if [ -z "$PLUGIN" ] || [ -z "$VERSION" ]; then
+	echo "Usage: $0 <plugin> <version>   (plugins: $(ls plugins | tr '\n' ' '))" >&2
+	exit 1
+fi
+MANIFEST="plugins/$PLUGIN/manifest.json"
+if [ ! -f "$MANIFEST" ]; then
+	echo "No such plugin: $PLUGIN" >&2
 	exit 1
 fi
 if ! git diff --quiet || ! git diff --cached --quiet; then
@@ -15,11 +23,12 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
 	exit 1
 fi
 
-sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" plugin/manifest.json
-rm plugin/manifest.json.bak
+sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$MANIFEST"
+rm "$MANIFEST.bak"
 ./test/run-tests.sh
 
-git commit -qam "Release $VERSION"
-git tag "v$VERSION"
-git push origin HEAD "v$VERSION"
-echo "Tagged v$VERSION; the release appears at https://github.com/Phlya/zotero-teams-import/releases once the workflow finishes"
+TAG="$PLUGIN-v$VERSION"
+git commit -qam "Release $PLUGIN $VERSION"
+git tag "$TAG"
+git push origin HEAD "$TAG"
+echo "Tagged $TAG; the release appears at https://github.com/Phlya/zotero-paper-import/releases once the workflow finishes"

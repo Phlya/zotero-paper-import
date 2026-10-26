@@ -1,15 +1,15 @@
-/* global Zotero, TeamsLinkParser */
+/* global Zotero, LinkParser */
 
 /*
  * Find items already in a library that match a paper reference.
  *
  * Each lookup uses a broad Zotero.Search ("contains") to get candidates and then
- * verifies them exactly with the normalizers in TeamsLinkParser, so e.g. DOI
+ * verifies them exactly with the normalizers in LinkParser, so e.g. DOI
  * 10.1/abc doesn't match 10.1/abcd. Trashed items are ignored (Zotero.Search's default).
  */
 
-var TeamsDedup = (function () {
-	const P = TeamsLinkParser;
+var Dedup = (function () {
+	const P = LinkParser;
 
 	// Titles this short are too generic to treat a match as a duplicate ("Editorial", "Correction")
 	const MIN_TITLE_WORDS = 4;

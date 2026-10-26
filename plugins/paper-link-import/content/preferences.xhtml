@@ -1,0 +1,15 @@
+<linkset>
+	<html:link rel="localization" href="paper-link-import.ftl"/>
+</linkset>
+<vbox id="paper-link-import-prefs">
+	<groupbox>
+		<label><html:h2 data-l10n-id="paper-link-import-prefs-import"/></label>
+		<checkbox data-l10n-id="paper-link-import-prefs-fulltext" preference="extensions.paper-link-import.fetchFullText" native="true"/>
+		<checkbox data-l10n-id="paper-link-import-prefs-match-titles" preference="extensions.paper-link-import.matchTitles" native="true"/>
+		<checkbox data-l10n-id="paper-link-import-prefs-paper-types" preference="extensions.paper-link-import.paperTypesOnly" native="true"/>
+		<hbox align="center">
+			<label data-l10n-id="paper-link-import-prefs-tag" control="paper-link-import-tag"/>
+			<html:input id="paper-link-import-tag" type="text" size="20" preference="extensions.paper-link-import.tag"/>
+		</hbox>
+	</groupbox>
+</vbox>

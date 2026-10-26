@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const P = require("../plugin/content/linkParser.js");
+const P = require("../core/linkParser.js");
 
 test("identifiersFromURL: DOIs from publisher URLs", () => {
 	let cases = {
@@ -190,4 +190,34 @@ test("extractReferences: trailing punctuation and wrapping parens", () => {
 test("extractReferences: empty input", () => {
 	assert.deepEqual(P.extractReferences(""), []);
 	assert.deepEqual(P.extractReferences("no links here"), []);
+});
+
+test("extractReferences: links without https://, as Teams displays them", () => {
+	let refs = P.extractReferences(`Two papers:
+www.biorxiv.org/content/10.64898/2026.10.14.759128v1
+nature.com/articles/s41586-024-07000-1.
+Not links: a@fmi.ch/x, version 1.2/3, file.txt/`);
+	assert.deepEqual(refs.map(r => [r.url, r.ids]), [
+		["https://www.biorxiv.org/content/10.64898/2026.10.14.759128v1", { DOI: "10.64898/2026.10.14.759128" }],
+		["https://nature.com/articles/s41586-024-07000-1", { DOI: "10.1038/s41586-024-07000-1" }],
+	]);
+	// The same link with and without https:// counts once
+	assert.equal(P.extractReferences("https://www.nature.com/articles/s41586-024-07000-1 www.nature.com/articles/s41586-024-07000-1").length, 1);
+});
+
+test("extractReferences: bare preprint DOIs lose their version suffix", () => {
+	assert.deepEqual(P.extractReferences("doi: 10.64898/2026.10.14.759128v2.").map(r => r.ids), [{ DOI: "10.64898/2026.10.14.759128" }]);
+});
+
+test("htmlToTextWithLinks keeps addresses of links hidden behind words", () => {
+	let html = '<html><head><style>p{color:red}</style></head><body><!--StartFragment-->'
+		+ '<p>Look at <a href="https://www.nature.com/articles/s41586-024-07000-1">this paper</a> and '
+		+ '<a href="https://www.biorxiv.org/content/10.64898/2026.10.14.759128v1">www.biorxiv.org/content/10.64898/2026.10.14.759128v1</a> &amp; more</p>'
+		+ '<!--EndFragment--></body></html>';
+	let text = P.htmlToTextWithLinks(html);
+	assert.equal(text, "Look at this paper <https://www.nature.com/articles/s41586-024-07000-1> and https://www.biorxiv.org/content/10.64898/2026.10.14.759128v1 & more");
+	assert.deepEqual(P.extractReferences(text).map(r => r.ids), [
+		{ DOI: "10.1038/s41586-024-07000-1" },
+		{ DOI: "10.64898/2026.10.14.759128" },
+	]);
 });

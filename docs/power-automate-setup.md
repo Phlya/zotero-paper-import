@@ -29,42 +29,66 @@ the library chosen in settings; delete it afterwards.
 3. Name it *Teams papers to Zotero*. In *Choose your flow's trigger*, search for
    **When a new channel message is added** (Microsoft Teams) and select it. Click **Create**.
 4. In the trigger, pick the **Team** and the **Channel** where papers are posted.
-5. The trigger only says *that* a message was posted (its ID and a link), not what it says. To
-   fetch the message itself, click **+** under the trigger → **Add an action**, search for
-   **Get message details** (**Microsoft Teams**) and select it. Fill it in:
-   - **Message**: click into the field, open the dynamic content list (the ⚡ button) and pick
-     **Message ID** from the trigger. Power Automate wraps the step in a **For each** loop
-     automatically, because the trigger can report several messages at once. That's expected.
-   - **Message type**: **Channel**.
-   - **Team** and **Channel**: pick the same team and channel as in the trigger (or the dynamic
-     content **Team ID** / **Channel ID** from the trigger).
-6. Inside the **For each**, below *Get message details*, click **+** → **Add an action**, search
+5. The trigger only says *that* a message was posted (its ID, whether it's a reply, and a link),
+   not what it says, and it can report several messages at once. Click **+** under the trigger →
+   **Add an action**, search for **For each** (**Control**) and select it. In *Select an output from
+   previous steps*, choose **Insert expression** (the *fx* button), paste the following and click
+   **Add**:
+   ```
+   triggerBody()?['value']
+   ```
+6. Inside the **For each**, click **+** → **Add an action**, search for **Send a Microsoft Graph
+   HTTP request** (**Microsoft Teams**) and select it. This fetches the message itself; unlike
+   *Get message details*, it also works for replies, which Teams stores under their parent post.
+   - **URI**: **Insert expression**, paste the following (one line) and click **Add**:
+     ```
+     concat('https://graph.microsoft.com/v1.0/teams/', items('For_each')?['teamId'], '/channels/', items('For_each')?['channelId'], '/messages/', if(or(empty(items('For_each')?['replyToMessageId']), equals(items('For_each')?['replyToMessageId'], items('For_each')?['messageId'])), items('For_each')?['messageId'], concat(items('For_each')?['replyToMessageId'], '/replies/', items('For_each')?['messageId'])))
+     ```
+     For a post this asks for `…/messages/<post id>`, for a reply `…/messages/<post id>/replies/<reply id>`.
+   - **Method**: **GET**.
+7. Still inside the **For each**, below the HTTP request, click **+** → **Add an action**, search
    for **Create file** (**OneDrive for Business**) and select it. Fill it in:
    - **Folder Path**: click the folder icon and choose `/ZoteroInbox`.
-   - **File Name**: pick the dynamic content **Message ID** from the trigger, then type `.json`
-     right after it, so the field shows `[Message ID].json`.
-   - **File Content**: choose **Insert expression** (the *fx* button), paste the following and
-     click **Add**:
+   - **File Name**: **Insert expression**:
      ```
-     string(body('Get_message_details'))
+     concat(items('For_each')?['messageId'], '.json')
      ```
-     If you renamed the *Get message details* step, use its new name with spaces replaced by
-     underscores.
-7. **Save**. If your organization blocks one of the connectors, Power Automate says so here.
+   - **File Content**: **Insert expression**:
+     ```
+     string(body('Send_a_Microsoft_Graph_HTTP_request'))
+     ```
+   The expressions refer to the steps by name, with spaces replaced by underscores. If your loop
+   is called *Apply to each* (older designer) or you renamed a step, change `For_each` or
+   `Send_a_Microsoft_Graph_HTTP_request` to match.
+8. **Save**. If your organization blocks one of the connectors, Power Automate says so here.
 
 The finished flow looks like this:
 
 ```
 When a new channel message is added
-└─ For each
-   ├─ Get message details
-   └─ Create file   (/ZoteroInbox/[Message ID].json, content = the message)
+└─ For each   (each message the trigger reports)
+   ├─ Send a Microsoft Graph HTTP request   (GET the post or reply)
+   └─ Create file   (/ZoteroInbox/<message id>.json, content = the message)
 ```
 
-A correct file starts with something like `{"id":"1792755836084","replyToId":null,…,"body":{"contentType":"html","content":"<p>…`.
-If a file only contains `"changeType":"created"` and `"resourceData"`, the *Get message details*
-step is missing or the *File Content* expression points at the trigger instead of that step;
-Zotero moves such files to `ZoteroInbox/failed/` and shows a warning.
+A correct file starts with something like `{"@odata.context":…,"id":"1792755836084","replyToId":…,"body":{"contentType":"html","content":"<p>…`.
+If a file only contains `"changeType":"created"` and `"resourceData"`, the *File Content*
+expression points at the trigger instead of the HTTP request; Zotero moves such files to
+`ZoteroInbox/failed/` and shows a warning.
+
+### Already set up the flow with *Get message details*?
+
+That step fails for replies (*UnknownError*), because it can only look up top-level posts. Edit
+the flow:
+
+1. Inside the **For each**, add **Send a Microsoft Graph HTTP request** (Microsoft Teams) with the
+   **URI** and **Method** from step 6 above. If your loop is called *Apply to each*, use
+   `Apply_to_each` instead of `For_each` in the expression.
+2. In **Create file**, replace the **File Content** expression with
+   `string(body('Send_a_Microsoft_Graph_HTTP_request'))`. The file name can stay as it is.
+3. Delete the **Get message details** step and **Save**.
+4. To recover a reply that failed before the change: in the flow's **Run history**, open the
+   failed run and click **Resubmit**.
 
 ## 3. Test it
 
@@ -87,8 +111,7 @@ group library will be added to the group.
 
 ## Limits
 
-- **Replies in threads probably aren't included.** The trigger is meant for new posts in the
-  channel. If papers posted as replies don't arrive, tell me.
+- **Replies** are included with the flow above (the trigger fires for them too).
 - **Older messages aren't imported.** For a backfill, copy the old messages from Teams and paste
   them into **Tools → Import Papers from Teams Text…**.
 - **Zotero must run sometime.** Messages wait in the folder until Zotero is open; nothing is lost

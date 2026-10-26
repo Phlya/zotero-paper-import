@@ -7,7 +7,7 @@
   "applications": {
     "zotero": {
       "id": "paper-link-import@phlya.github.io",
-      "update_url": "https://github.com/Phlya/zotero-paper-import/releases/latest/download/updates.json",
+      "update_url": "https://github.com/Phlya/zotero-paper-import/releases/download/updates/updates.json",
       "strict_min_version": "10.0",
       "strict_max_version": "10.*"
     }

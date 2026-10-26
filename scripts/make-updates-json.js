@@ -1,9 +1,9 @@
 // Write the update manifest Zotero checks via each plugin's update_url.
 // Usage: node scripts/make-updates-json.js <plugin> <xpi> [previous updates.json] > updates.json
 //
-// Both plugins point their update_url at releases/latest/download/updates.json, so that one file
-// lists the current version of every plugin. Each release starts from the previous latest
-// release's file and replaces only its own plugin's entry.
+// Both plugins point their update_url at the "updates" release's updates.json, so that one file
+// lists the current version of every plugin. Each release starts from the current file and
+// replaces only its own plugin's entry.
 
 const fs = require("fs");
 const crypto = require("crypto");

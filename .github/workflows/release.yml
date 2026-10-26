@@ -8,7 +8,7 @@ on:
 permissions:
   contents: write
 
-# Each release extends the previous latest release's updates.json, so run one at a time
+# Each release extends the current updates.json, so run one at a time
 concurrency:
   group: release
   cancel-in-progress: false
@@ -47,8 +47,8 @@ jobs:
       - name: Build
         run: |
           ./build.sh "$PLUGIN"
-          # Start from the current latest release's manifest so the other plugin's entry is kept
-          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/updates.json" \
+          # Start from the current manifest so the other plugin's entry is kept
+          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/download/updates/updates.json" \
             -o build/previous-updates.json || rm -f build/previous-updates.json
           node scripts/make-updates-json.js "$PLUGIN" "build/$PLUGIN-$VERSION.xpi" build/previous-updates.json \
             > build/updates.json
@@ -64,3 +64,15 @@ jobs:
             --title "$NAME $VERSION" \
             --latest \
             --generate-notes
+
+      # Both plugins' update_url point at the "updates" release's updates.json. A fixed release is
+      # used because GitHub's releases/latest/download/ only follows plain version tags (v1.2.3).
+      - name: Update the plugins' update manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view updates >/dev/null 2>&1 || gh release create updates \
+            --title "Update manifest" \
+            --notes "updates.json here tells Zotero about new versions of both plugins. Not a plugin release; download plugins from the other releases." \
+            --latest=false
+          gh release upload updates build/updates.json --clobber

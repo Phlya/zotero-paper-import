@@ -100,9 +100,11 @@ scripts/release.sh paper-link-import 0.2.0
 
 This sets the version in `plugins/<plugin>/manifest.json`, runs the tests, commits, tags
 `<plugin>-v<version>` and pushes. The *Release* GitHub Actions workflow builds that plugin's `.xpi`
-and publishes it with an `updates.json`. Both plugins' `update_url` point at the latest release's
-`updates.json`, which lists the current version of every plugin: each release starts from the
-previous one and replaces only its own entry.
+and publishes it. It also updates `updates.json` on the fixed
+[`updates`](https://github.com/Phlya/zotero-paper-import/releases/tag/updates) release, which both
+plugins' `update_url` point at: it lists the current version of every plugin, and each release
+replaces only its own entry. (A fixed release is needed because GitHub's
+`releases/latest/download/` only follows plain version tags like `v1.2.3`.)
 
 ## License
 
